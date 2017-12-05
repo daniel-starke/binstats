@@ -24,7 +24,8 @@ namespace gui {
 
 
 /* forward declarations */
-class InfoWindow;
+class LicenseInfoWindow;
+class TypeFilterPopup;
 
 
 /**
@@ -92,7 +93,8 @@ private:
 	Fl_Table_Row            * symbols;
 	Fl_Native_File_Chooser  * chooseNm;
 	Fl_Native_File_Chooser  * chooseBin;
-	InfoWindow              * infoWin;
+	LicenseInfoWindow       * licenseWin;
+	TypeFilterPopup         * typeFilter;
 	char                    * currentNm;
 	char                    * currentBin;
 public:
@@ -114,6 +116,7 @@ private:
 	PCF_GUI_BIND(SymbolViewer, onChangeBin, Fl_Input)
 	PCF_GUI_BIND(SymbolViewer, onInformation, Fl_Button)
 	PCF_GUI_BIND(SymbolViewer, onChangePattern, Fl_Input)
+	PCF_GUI_BIND(SymbolViewer, onTableEvent, Fl_Table_Row)
 	
 	void onBrowseNm(Fl_Button * button);
 	void onChangeNm(Fl_Input * input);
@@ -121,6 +124,7 @@ private:
 	void onChangeBin(Fl_Input * input);
 	void onInformation(Fl_Button * button);
 	void onChangePattern(Fl_Input * input);
+	void onTableEvent(Fl_Table_Row * table);
 	
 	void read();
 	void update();

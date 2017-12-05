@@ -4,5 +4,14 @@ M.N.P
 | +---- minor: increased if syntax/semantic breaking changes were applied
 +------ major: increased if elementary changes (from user's point of view) were made
 
+1.1.0 (2017-12-05)
+ - added: debug symbol support
+ - added: symbol type filter (incl. local/global) available via right click on tables
+ - added: better error reporting for invalid paths
+ - changed: pattern search to fall-back to substring search if search string is no pattern
+ - fixed: invalid total statistics if pattern matches nothing
+ - fixed: drag and drop handling on X11 systems
+ - fixed: non-Windows build
+
 1.0.0 (2017-12-03)
  - first release

@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2017 Daniel Starke
  * @date 2017-12-02
- * @version 2017-12-03
+ * @version 2017-12-05
  */
 #ifndef __LIBPCF_TARGET_H__
 #define __LIBPCF_TARGET_H__
@@ -496,7 +496,7 @@ static inline uint64_t rotateRight64(uint64_t x, const uint8_t n) {
 static int stricmp(const char * lhs, const char * rhs) {
 	for (; *lhs && tolower(*lhs) == tolower(*rhs); lhs++, rhs++)
 	if (*lhs == 0) return 0;
-	return *reinterpret_cast<const unsigned char *>(lhs) - *reinterpret_cast<const unsigned char *>(rhs);
+	return *((const unsigned char *)lhs) - *((const unsigned char *)rhs);
 }
 #endif /* HAS_NO_STRICMP */
 

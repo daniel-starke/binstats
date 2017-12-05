@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2017 Daniel Starke
  * @date 2017-12-01
- * @version 2017-12-01
+ * @version 2017-12-05
  */
 #include <cxxabi.h>
 #include <cstring>
@@ -59,7 +59,11 @@ void DroppableReadOnlyInput::paste() {
 			break;
 		}
 	}
-	this->value(files);
+	if (strncmp(files, "file://", 7) == 0) {
+		this->value(files + 7);
+	} else {
+		this->value(files);
+	}
 	this->do_callback();
 }
 

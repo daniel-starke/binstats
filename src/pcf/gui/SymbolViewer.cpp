@@ -3,7 +3,7 @@
  * @author Daniel Starke
  * @copyright Copyright 2017 Daniel Starke
  * @date 2017-12-01
- * @version 2017-12-03
+ * @version 2017-12-05
  * @remarks nm -S --size-sort -f bsd -t d <file>
  */
 #include <algorithm>
@@ -16,6 +16,8 @@
 #include <FL/fl_ask.H>
 #include <FL/fl_draw.H>
 #include <FL/Fl_Box.H>
+#include <FL/Fl_Check_Button.H>
+#include <FL/Fl_Scroll.H>
 #include <FL/Fl_Text_Display.H>
 #include <FL/Fl_Tile.H>
 #include <pcf/gui/SymbolViewer.hpp>
@@ -24,6 +26,7 @@
 
 
 extern "C" {
+#include <errno.h>
 #include <libpcf/fdios.h>
 #ifdef PCF_IS_WIN
 #include <libpcf/fdious.h>
@@ -35,12 +38,51 @@ namespace pcf {
 namespace gui {
 
 
-class InfoWindow : public Fl_Double_Window {
+/**
+ * Type mapping as reported from nm.
+ * 
+ * @see https://sourceware.org/binutils/docs/binutils/nm.html
+ */
+static const char * typeStr[] = {
+	/* A */ "absolute value",
+	/* B */ "uninitialized data (BSS)",
+	/* C */ "uninitialized data (common)",
+	/* D */ "initialized data",
+	/* E */ "E",
+	/* F */ "F",
+	/* G */ "initialized data (small)",
+	/* H */ "H",
+	/* I */ "indirect function",
+	/* J */ "J",
+	/* K */ "K",
+	/* L */ "L",
+	/* M */ "M",
+	/* N */ "debug",
+	/* O */ "O",
+	/* P */ "stack unwind",
+	/* Q */ "Q",
+	/* R */ "read only data",
+	/* S */ "uninitialized data (small)",
+	/* T */ "code",
+	/* U */ "unique global",
+	/* V */ "weak object",
+	/* W */ "weak object (untagged)",
+	/* X */ "X",
+	/* Y */ "Y",
+	/* Z */ "Z",
+	/* ? */ "unknown"
+};
+
+
+/**
+ * License information window.
+ */
+class LicenseInfoWindow : public Fl_Double_Window {
 private:
 	Fl_Text_Buffer * buffer;
 	Fl_Text_Display * license;
 public:
-	explicit InfoWindow(const int W, const int H, const char * L = NULL):
+	explicit LicenseInfoWindow(const int W, const int H, const char * L = NULL):
 		Fl_Double_Window(W, H, L),
 		buffer(NULL),
 		license(NULL)
@@ -60,6 +102,8 @@ public:
 		license->textfont(FL_COURIER);
 		license->align(FL_ALIGN_TOP | FL_ALIGN_LEFT);
 		license->box(FL_BORDER_BOX);
+		license->textsize(8 * FL_NORMAL_SIZE / 10);
+		license->scroll(0, 0); /* update scroll range according to content */
 		y = license->y() + license->h() + spaceV;
 		
 		Fl_Button * ok = new Fl_Button((W - okH) / 2, y, okH, widgetV, "OK");
@@ -69,13 +113,13 @@ public:
 		end();
 	}
 	
-	virtual ~InfoWindow() {
+	virtual ~LicenseInfoWindow() {
 		delete this->license;
 		delete this->buffer;
 	}
 	
 private:
-	PCF_GUI_BIND(InfoWindow, onOk, Fl_Button);
+	PCF_GUI_BIND(LicenseInfoWindow, onOk, Fl_Button);
 	
 	void onOk(Fl_Button * /* button */) {
 		this->hide();
@@ -83,42 +127,125 @@ private:
 };
 
 
-namespace {
-
-
 /**
- * Type mapping as reported from nm.
- * 
- * @see https://sourceware.org/binutils/docs/binutils/nm.html
+ * Type filter popup.
  */
-const char * typeStr[] = {
-	/* A */ "absolute value",
-	/* B */ "uninitialized data (BSS)",
-	/* C */ "uninitialized data (common)",
-	/* D */ "initialized data",
-	/* E */ "",
-	/* F */ "",
-	/* G */ "initialized data (small)",
-	/* H */ "",
-	/* I */ "indirect function",
-	/* J */ "",
-	/* K */ "",
-	/* L */ "",
-	/* M */ "",
-	/* N */ "",
-	/* O */ "",
-	/* P */ "stack unwind",
-	/* Q */ "",
-	/* R */ "read only data",
-	/* S */ "uninitialized data (small)",
-	/* T */ "code",
-	/* U */ "unique global",
-	/* V */ "weak object",
-	/* W */ "weak object (untagged)",
-	/* X */ "",
-	/* Y */ "",
-	/* Z */ ""
+class TypeFilterPopup : public Fl_Double_Window {
+private:
+	bool done;
+	Fl_Scroll * scroll;
+	Fl_Check_Button * filters[30];
+public:
+	explicit TypeFilterPopup(const int W, const int H, const char * L = NULL):
+		Fl_Double_Window(W, H, L),
+		done(false),
+		scroll(NULL)
+	{
+		const int spaceH = adjDpiH(3);
+		const int spaceV = adjDpiV(3);
+		const int widgetV = adjDpiV(20);
+		int y = spaceV;
+		Fl_Box * sep;
+		
+		scroll = new Fl_Scroll(0, 0, W, H);
+		scroll->box(FL_THIN_UP_BOX);
+		scroll->scrollbar_size(adjDpiH(16));
+		
+		filters[0] = new Fl_Check_Button(spaceH, y, W - spaceH - scroll->scrollbar_size() - Fl::box_dw(scroll->box()), widgetV, "local");
+		filters[0]->set();
+		y += spaceV + widgetV;
+		
+		filters[1] = new Fl_Check_Button(spaceH, y, W - spaceH - scroll->scrollbar_size() - Fl::box_dw(scroll->box()), widgetV, "global");
+		filters[1]->set();
+		y += spaceV + widgetV;
+		
+		sep = new Fl_Box(Fl::box_dx(scroll->box()), y, W - scroll->scrollbar_size() - Fl::box_dw(scroll->box()), 2);
+		sep->box(FL_THIN_DOWN_BOX);
+		y += sep->h();
+		
+		for (size_t n = 0; n < 27; n++) {
+			filters[n + 2] = new Fl_Check_Button(spaceH, y, W - spaceH - scroll->scrollbar_size() - Fl::box_dw(scroll->box()), widgetV, typeStr[n]);
+			filters[n + 2]->set();
+			y += spaceV + widgetV;
+		}
+		
+		scroll->end();
+		end();
+		
+		clear_border();
+		set_modal();
+		set_menu_window();
+	}
+	
+	virtual ~TypeFilterPopup() {
+		delete this->scroll;
+	}
+	
+	void show() {
+		/* grab this window (capture target, however, is the current topmost window) */
+		Fl::grab(*this);
+		/* the window is created from here on */
+		this->Fl_Double_Window::show();
+		this->done = false;
+		while ( ! this->done ) Fl::wait();
+		Fl::grab(NULL);
+	}
+	
+	bool isSet(const int index) const {
+		if (index < -2 || index > 26) return false;
+		return this->filters[index + 2]->value() != 0;
+	}
+	
+protected:
+	/**
+	 * Event handler.
+	 * 
+	 * @param[in] e - event 
+	 * @return 0 - if the event was not used or understood 
+	 * @return 1 - if the event was used and can be deleted
+	 */
+	int handle(int e) {
+		int result = Fl_Double_Window::handle(e);
+		switch (e) {
+		case FL_UNFOCUS:
+			if ( ! contains(Fl::focus()) ) {
+				hide();
+				result = 1;
+			}
+			break;
+		case FL_PUSH:
+			if ( ! Fl::event_inside(0, 0, w(), h()) ) {
+				hide();
+				result = 1;
+			}
+			break;
+		case FL_KEYBOARD:
+			switch (Fl::event_key()) {
+			case FL_KP_Enter:
+			case FL_Enter:
+				do_callback();
+				/* fall-through */
+			case FL_Escape:
+				hide();
+				result = 1;
+				break;
+			default:
+				break;
+			}
+			break;
+		case FL_HIDE:
+			done = true;
+			result = 1;
+			break;
+		default:
+			break;
+		}
+		return result;
+	}
 };
+
+
+namespace {
 
 
 /**
@@ -132,6 +259,23 @@ int nullSafeStrCmp(const char * lhs, const char * rhs) {
 	if (lhs == NULL) return -1;
 	if (rhs == NULL) return 1;
 	return strcmp(lhs, rhs);
+}
+
+
+/**
+ * Find first occurrence in str of any of the characters in find.
+ * Returns NULL if nothing was found.
+ * 
+ * @param[in] str - search within this string
+ * @param[in] find - find any of this
+ * @return first occurrence of find in str or NULL
+ */
+const char * xstrpbrk(const char * str, const char * find) {
+	if (str == NULL || find == NULL) return NULL;
+	for (; *str != 0; str++) {
+		if (strchr(find, *str) != NULL) return str;
+	}
+	return NULL;
 }
 
 
@@ -202,10 +346,10 @@ int matchPattern(const char * text, const char * pattern) {
 				curPat = sPat;
 				sPat++;
 			}
-			if (*sPat == *curText || *sPat == '?' || (*sPat == '#' && (isdigit(*curText) ? 1 : 0))) {
+			if (*sPat == *curText || *sPat == '?' || (*sPat == '#' && isdigit(*curText))) {
 				laPat = sPat;
 				while (*laPat != '*' && *laPat != 0) {
-					if (*laText == *laPat || *laPat == '?' || (*laPat == '#' && (isdigit(*laText) ? 1 : 0))) {
+					if (*laText == *laPat || *laPat == '?' || (*laPat == '#' && isdigit(*laText))) {
 						laText++;
 						laPat++;
 					} else {
@@ -257,7 +401,7 @@ int matchPattern(const char * text, const char * pattern) {
 			}
 			break;
 		case '#':
-			if ( (isdigit(*curText) ? 1 : 0) ) {
+			if ( isdigit(*curText) ) {
 				curText++;
 				curPat++;
 				if (*curText != 0 && *curPat == 0) {
@@ -511,6 +655,10 @@ SymbolViewer::SymbolViewer(const int W, const int H, const char * L):
 	pattern(NULL),
 	stats(NULL),
 	symbols(NULL),
+	chooseNm(NULL),
+	chooseBin(NULL),
+	licenseWin(NULL),
+	typeFilter(NULL),
 #ifdef PCF_IS_WIN
 	currentNm(strdup("nm.exe")),
 #else
@@ -554,7 +702,7 @@ SymbolViewer::SymbolViewer(const int W, const int H, const char * L):
 	
 	g = new DropForward<Fl_Group>(spaceH, y, W - (2 * spaceH), inputV);
 	pattern = new TriggerHappyInput(spaceH + labelH, y, W - (2 * spaceH) - browseH - labelH - 2, inputV, "pattern");
-	pattern->tooltip("* matches any character 0 to unlimited times\n? matches any character exactly once\n# matches any digit exactly once\n\nWrite *string* to search for string.");
+	pattern->tooltip("* matches any character 0 to unlimited times\n? matches any character exactly once\n# matches any digit exactly once");
 	pattern->callback(PCF_GUI_CALLBACK(onChangePattern), this);
 	info = new DropForward<Fl_Button>(W - spaceH - browseH, y, browseH, inputV, "@#menu");
 	info->labelcolor(fl_lighter(FL_RED));
@@ -572,11 +720,13 @@ SymbolViewer::SymbolViewer(const int W, const int H, const char * L):
 	static_cast<StatsListView *>(stats)->headerData[0] = "Type";
 	static_cast<StatsListView *>(stats)->headerData[1] = "Size";
 	static_cast<StatsListView *>(stats)->headerData[2] = "Symbols";
+	static_cast<StatsListView *>(stats)->callback(PCF_GUI_CALLBACK(onTableEvent), this);
 	
 	symbols = new SymsListView(tile->x(), tile->y() + (tile->h() / 2), tile->w(), tile->h() / 2);
 	static_cast<SymsListView *>(symbols)->headerData[0] = "Type";
 	static_cast<SymsListView *>(symbols)->headerData[1] = "Size";
 	static_cast<SymsListView *>(symbols)->headerData[2] = "Symbol";
+	static_cast<SymsListView *>(symbols)->callback(PCF_GUI_CALLBACK(onTableEvent), this);
 	
 	tile->end();
 	
@@ -606,7 +756,9 @@ SymbolViewer::SymbolViewer(const int W, const int H, const char * L):
 	chooseBin->filter("Binary\t*");
 #endif
 
-	infoWin = new InfoWindow(adjDpiH(320), adjDpiV(240), "About binstats " BINSTATS_VERSION);
+	licenseWin = new LicenseInfoWindow(adjDpiH(560), adjDpiV(600), "About binstats " BINSTATS_VERSION);
+	
+	typeFilter = new TypeFilterPopup(adjDpiH(240), adjDpiV(320));
 
 	Fl::focus(pattern);
 }
@@ -627,7 +779,8 @@ SymbolViewer::~SymbolViewer() {
 	delete this->symbols;
 	delete this->chooseNm;
 	delete this->chooseBin;
-	delete this->infoWin;
+	delete this->licenseWin;
+	delete this->typeFilter;
 	if (this->currentNm != NULL) free(this->currentNm);
 	if (this->currentBin != NULL) free(this->currentBin);
 }
@@ -651,6 +804,7 @@ int SymbolViewer::handle(int e) {
 		break;
 	case FL_PASTE:
 		binPath->paste();
+		this->read();
 		result = 1;
 		break;
 	default:
@@ -663,6 +817,7 @@ int SymbolViewer::handle(int e) {
 void SymbolViewer::onBrowseNm(Fl_Button * /* button */) {
 	if (this->chooseNm->show() == 0) {
 		this->nmPath->value(this->chooseNm->filename());
+		this->read();
 	}
 }
 
@@ -675,6 +830,7 @@ void SymbolViewer::onChangeNm(Fl_Input * /* input */) {
 void SymbolViewer::onBrowseBin(Fl_Button * /* button */) {
 	if (this->chooseBin->show() == 0) {
 		this->binPath->value(this->chooseBin->filename());
+		this->read();
 	}
 }
 
@@ -685,7 +841,7 @@ void SymbolViewer::onChangeBin(Fl_Input * /* input */) {
 
 
 void SymbolViewer::onInformation(Fl_Button * /* button */) {
-	this->infoWin->show();
+	this->licenseWin->show();
 }
 
 
@@ -694,6 +850,17 @@ void SymbolViewer::onChangePattern(Fl_Input * /* input */) {
 }
 
 
+void SymbolViewer::onTableEvent(Fl_Table_Row * /* table */) {
+	if (Fl::event() != FL_PUSH || Fl::event_button() != FL_RIGHT_MOUSE) return;
+	this->typeFilter->position(Fl::event_x_root(), Fl::event_y_root());
+	this->typeFilter->show();
+	this->update();
+}
+
+
+/**
+ * Reads the symbol list from the binary file and updates the tables if possible.
+ */
 void SymbolViewer::read() {
 	struct stat fileInfo[1];
 	/* check values */
@@ -709,9 +876,17 @@ void SymbolViewer::read() {
 	if (this->currentBin != NULL) free(this->currentBin);
 	this->currentBin = strdup(this->binPath->value());
 	/* check paths */
-	if ( fl_stat(this->nmPath->value(), fileInfo) ) return;
+	if (fl_stat(this->nmPath->value(), fileInfo) < 0) {
+		fl_message_title("Error");
+		fl_alert("Error reading \"%s\".\n%s.", this->nmPath->value(), strerror(errno));
+		return;
+	}
 	if (fileInfo->st_size <= 0) return;
-	if ( fl_stat(this->binPath->value(), fileInfo) ) return;
+	if (fl_stat(this->binPath->value(), fileInfo) < 0) {
+		fl_message_title("Error");
+		fl_alert("Error reading \"%s\".\n%s.", this->binPath->value(), strerror(errno));
+		return;
+	}
 	if (fileInfo->st_size <= 0) return;
 #ifdef PCF_IS_WIN
 	/* convert nm path to UTF-16 */
@@ -745,7 +920,7 @@ void SymbolViewer::read() {
 	tFdioPHandle * nm = fdious_popen(nmPathW, cmdW, NULL, NULL, tFdioPMode(FDIO_USE_STDOUT | FDIO_COMBINE));
 #else /* not Windows */
 	/* build command-line */
-	const char * cmd = {
+	const char * cmd[] = {
 		fl_filename_name(this->nmPath->value()),
 		"-S",
 		"--size-sort",
@@ -755,9 +930,9 @@ void SymbolViewer::read() {
 		"d",
 		this->binPath->value(),
 		NULL
-	}
+	};
 	/* call nm */
-	tFdioPHandle * nm = fdios_popen(this->nmPath->value(), cmd, NULL, NULL, FDIO_USE_STDOUT | FDIO_COMBINE);
+	tFdioPHandle * nm = fdios_popen(this->nmPath->value(), cmd, NULL, NULL, tFdioPMode(FDIO_USE_STDOUT | FDIO_COMBINE));
 #endif /* not Windows */
 	/* parse nm output */
 	if (nm != NULL) {
@@ -837,6 +1012,9 @@ void SymbolViewer::read() {
 }
 
 
+/**
+ * Updates the symbol tables.
+ */
 void SymbolViewer::update() {
 	StatsListView & statsView = *static_cast<StatsListView *>(this->stats);
 	SymsListView & symsView = *static_cast<SymsListView *>(this->symbols);
@@ -844,26 +1022,47 @@ void SymbolViewer::update() {
 	
 	const char * pat = this->pattern->value();
 	Statistics newStats[27];
+	bool filter[27];
 	Statistics * aStat;
+	const bool local = this->typeFilter->isSet(-2);
+	const bool global = this->typeFilter->isSet(-1);
 	
-	for (size_t n = 0; n < 26; n++) newStats[n] = Statistics(char('A' + n));
+	for (size_t n = 0; n < 26; n++) {
+		newStats[n] = Statistics(char('A' + n));
+		filter[n] = this->typeFilter->isSet(int(n));
+	}
 	newStats[26] = Statistics();
+	filter[26] = this->typeFilter->isSet(26);
 	
 	statsView.listData.clear();
 	symsView.listData.clear();
 	statsView.userData = Statistics('_');
 	
+	/* create filtered lists */
 	for (sym = this->symbolList.begin(); sym != symEnd; ++sym) {
-		if (pat != NULL && *pat != 0 && !matchPattern(sym->name, pat)) continue;
+		/* skip if pattern does not match (or substring not included if no real pattern given) */
+		if (pat != NULL && *pat != 0) {
+			if (xstrpbrk(pat, "*?#") == NULL) {
+				if (strstr(sym->name, pat) == NULL) continue;
+			} else if ( ! matchPattern(sym->name, pat) ) {
+				continue;
+			}
+		}
+		aStat = NULL;
+		if ( isalpha(sym->type) ) {
+			/* filter by type */
+			if ( ! filter[int(toupper(sym->type) - 'A')] ) continue;
+			if (islower(sym->type) && !local) continue;
+			if (isupper(sym->type) && !global) continue;
+			aStat = newStats + int(toupper(sym->type) - 'A');
+		} else if (sym->type == '?') {
+			/* filter by type */
+			if ( ! filter[26] ) continue;
+			aStat = newStats + 26;
+		}
 		symsView.listData.push_back(*sym);
 		statsView.userData.size += sym->size;
 		statsView.userData.symbols++;
-		aStat = NULL;
-		if ( isalpha(sym->type) ) {
-			aStat = newStats + int(toupper(sym->type) - 'A');
-		} else if (sym->type == '?') {
-			aStat = newStats + 26;
-		}
 		if (aStat != NULL) {
 			aStat->size += sym->size;
 			aStat->symbols++;
@@ -871,7 +1070,7 @@ void SymbolViewer::update() {
 	}
 	symsView.userData = statsView.userData;
 	
-	if ( ! this->symbolList.empty() ) statsView.listData.push_back(statsView.userData);
+	if ( ! symsView.listData.empty() ) statsView.listData.push_back(statsView.userData);
 	for (size_t n = 0; n < 27; n++) {
 		if (newStats[n].symbols <= 0) continue;
 		statsView.listData.push_back(newStats[n]);
