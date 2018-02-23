@@ -1,7 +1,7 @@
 /**
  * @file fdious.h
  * @author Daniel Starke
- * @copyright Copyright 2013-2017 Daniel Starke
+ * @copyright Copyright 2013-2018 Daniel Starke
  * @see fdious.c
  * @date 2013-06-16
  * @version 2017-12-03

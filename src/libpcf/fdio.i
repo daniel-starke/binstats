@@ -1,11 +1,11 @@
 /**
  * @file fdio.i
  * @author Daniel Starke
- * @copyright Copyright 2016-2017 Daniel Starke
+ * @copyright Copyright 2016-2018 Daniel Starke
  * @see fdios.h
  * @see fdious.h
  * @date 2016-08-17
- * @version 2017-12-03
+ * @version 2018-02-23
  * @internal This file is never used or compiled directly but only included.
  * @remarks Define CHAR_T to the character type before including this file.
  * @remarks See FPOPEN_FUNC() and FPCLOSE_FUNC() for further notes.
@@ -23,6 +23,7 @@
 #include <windows.h>
 #include <winbase.h>
 #else /* ! PCF_IS_WIN */
+#include <errno.h>
 #include <signal.h>
 #include <unistd.h>
 #ifdef FPOPEN_UNICODE
@@ -657,12 +658,18 @@ tFdioPHandle * FPOPEN_FUNC(const CHAR_T * shellPath, const char ** shell, const 
 	}
 	argv[i] = NULL;
 	
-	if (pipe(pStandardInput) != 0) goto onerror;
-	hasPStdIn = 1;
-	if (pipe(pStandardOutput) != 0) goto onerror;
-	hasPStdOut = 1;
-	if (pipe(pStandardError) != 0) goto onerror;
-	hasPStdErr = 1;
+	if ((((int)mode) & FDIO_USE_STDIN) != 0) {
+		if (pipe(pStandardInput) != 0) goto onerror;
+		hasPStdIn = 1;
+	}
+	if ((((int)mode) & FDIO_USE_STDOUT) != 0) {
+		if (pipe(pStandardOutput) != 0) goto onerror;
+		hasPStdOut = 1;
+	}
+	if ((((int)mode) & FDIO_USE_STDERR) != 0 && (((int)mode) & FDIO_COMBINE) == 0) {
+		if (pipe(pStandardError) != 0) goto onerror;
+		hasPStdErr = 1;
+	}
 
     if ((fd = (tFdioPHandle *)malloc(sizeof(tFdioPHandle))) == NULL) goto onerror;
 	
@@ -797,8 +804,10 @@ int FPCLOSE_FUNC(tFdioPHandle * fd) {
 	if (fd->in != NULL) fclose(fd->in);
 	
 	result = -1;
-	waitpid(fd->pid, &status, 0);
-	free(fd);
+	do {
+		errno = 0;
+		if (waitpid(fd->pid, &status, 0) >= 0) break;
+	} while (errno == EINTR);
 	
 	if ( WIFEXITED(status) ) {
 		result = WEXITSTATUS(status);
@@ -808,6 +817,7 @@ int FPCLOSE_FUNC(tFdioPHandle * fd) {
 	 * may fail with an error code while trying to write to them */
 	if (fd->out != NULL) fclose(fd->out);
 	if (fd->err != NULL) fclose(fd->err);
+	free(fd);
 	
 	return result;
 }

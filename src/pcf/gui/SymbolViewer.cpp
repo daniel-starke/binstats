@@ -1,7 +1,7 @@
 /**
  * @file SymbolViewer.cpp
  * @author Daniel Starke
- * @copyright Copyright 2017 Daniel Starke
+ * @copyright Copyright 2017-2018 Daniel Starke
  * @date 2017-12-01
  * @version 2017-12-05
  * @remarks nm -S --size-sort -f bsd -t d <file>
