@@ -5,7 +5,7 @@
  * @see fdios.h
  * @see fdious.h
  * @date 2016-08-17
- * @version 2018-02-23
+ * @version 2018-02-27
  * @internal This file is never used or compiled directly but only included.
  * @remarks Define CHAR_T to the character type before including this file.
  * @remarks See FPOPEN_FUNC() and FPCLOSE_FUNC() for further notes.
@@ -101,10 +101,10 @@ extern volatile HANDLE _LIBPCF_CREATEPROCESS_MUTEX;
  * PROC_THREAD_ATTRIBUTE_HANDLE_LIST.
  */
 static int isInheritableHandle(HANDLE handle) {
-  if ( ! handle ) return 0;
-  if (handle == INVALID_HANDLE_VALUE) return 0;
-  DWORD type = GetFileType(handle);
-  return type == FILE_TYPE_DISK || type == FILE_TYPE_PIPE;
+	if ( ! handle ) return 0;
+	if (handle == INVALID_HANDLE_VALUE) return 0;
+	DWORD type = GetFileType(handle);
+	return type == FILE_TYPE_DISK || type == FILE_TYPE_PIPE;
 }
 #endif /* _WIN32_WINNT >= _WIN32_WINNT_VISTA */
 
@@ -367,7 +367,7 @@ tFdioPHandle * FPOPEN_FUNC(const CHAR_T * shellPath, const CHAR_T ** shell, cons
 	
 	if ((fd = (tFdioPHandle *)malloc(sizeof(tFdioPHandle))) == NULL) {
 		goto onerror;
-    }
+	}
 	
 	/* disable inheritance for parent handles */
 	if ((((int)mode) & FDIO_USE_STDIN) != 0) {
@@ -614,7 +614,7 @@ tFdioPHandle * FPOPEN_FUNC(const CHAR_T * shellPath, const char ** shell, const 
 	int hasOldMask;
 	tFdioPHandle * fd;
 	size_t numArgs, strLen, totalStrLen;
-	const CHAR_T * arg, ** args;
+	const CHAR_T ** args;
 	CHAR_T * out;
 	CHAR_T ** argv;
 	int i;
@@ -632,10 +632,13 @@ tFdioPHandle * FPOPEN_FUNC(const CHAR_T * shellPath, const char ** shell, const 
 	argv = NULL;
 	
 	/* calculate passed number of arguments and final memory size */
-	numArgs = (command == NULL) ? 1 : 2;
-	args = shell;
+	numArgs = 1;
 	totalStrLen = 0;
-	for (arg = *args; arg != NULL; args++, arg = *args, numArgs++) {
+	if (command != NULL) {
+		numArgs++;
+		totalStrLen += TCHAR_STLEN(command) + 1;
+	}
+	for (args = shell; *args != NULL; args++, numArgs++) {
 		totalStrLen += TCHAR_STLEN(*args) + 1;
 	}
 	
@@ -643,8 +646,7 @@ tFdioPHandle * FPOPEN_FUNC(const CHAR_T * shellPath, const char ** shell, const 
 	argv = (CHAR_T **)malloc((sizeof(CHAR_T *) * numArgs) + (sizeof(CHAR_T) * totalStrLen));
 	if (argv == NULL) goto onerror;
 	out = (CHAR_T *)(&(argv[numArgs]));
-	args = shell;
-	for (i = 0; *args != NULL; args++, i++) {
+	for (args = shell, i = 0; *args != NULL; args++, i++) {
 		strLen = TCHAR_STLEN(*args) + 1;
 		memcpy(out, *args, sizeof(CHAR_T) * strLen);
 		argv[i] = out;
@@ -671,7 +673,7 @@ tFdioPHandle * FPOPEN_FUNC(const CHAR_T * shellPath, const char ** shell, const 
 		hasPStdErr = 1;
 	}
 
-    if ((fd = (tFdioPHandle *)malloc(sizeof(tFdioPHandle))) == NULL) goto onerror;
+	if ((fd = (tFdioPHandle *)malloc(sizeof(tFdioPHandle))) == NULL) goto onerror;
 	
 	/* Temporary disable signal handling for calling thread to avoid unexpected signals between
 	 * fork() and execvp(). */
@@ -686,11 +688,12 @@ tFdioPHandle * FPOPEN_FUNC(const CHAR_T * shellPath, const char ** shell, const 
 		goto onerror;
 		break;
 	case 0: /* child */
+		free(fd);
 		/* clear out signal handlers to avoid unexpected events */
 		sigAction.sa_handler = SIG_DFL;
 		sigAction.sa_flags = 0;
 		sigemptyset(&sigAction.sa_mask);
-		for (i = 0; i < NSIG; i++) sigaction(i, &sigAction, NULL);
+		for (i = 1; i < NSIG; i++) sigaction(i, &sigAction, NULL);
 		if (pthread_sigmask(SIG_SETMASK, &oldMask, NULL) < 0) goto onerror;
 	
 		/* set stdin/stdout/stderr accordingly */
@@ -814,7 +817,7 @@ int FPCLOSE_FUNC(tFdioPHandle * fd) {
 	}
 	
 	/* standard outputs need to be closed last or the child process
-	 * may fail with an error code while trying to write to them */
+	 * may fail with an error while trying to write to them */
 	if (fd->out != NULL) fclose(fd->out);
 	if (fd->err != NULL) fclose(fd->err);
 	free(fd);

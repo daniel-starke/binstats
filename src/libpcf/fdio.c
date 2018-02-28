@@ -4,7 +4,7 @@
  * @copyright Copyright 2015-2018 Daniel Starke
  * @see fdio.h
  * @date 2015-02-28
- * @version 2017-12-03
+ * @version 2018-02-26
  */
 #define _POSIX_C_SOURCE 200809L
 #include <stdlib.h>
@@ -36,23 +36,23 @@ int fdio_setMode(FILE * fd, tFdioMode mode) {
 #if defined(PCF_IS_WIN) && !defined(__CYGWIN__)
 	switch (mode) {
 	case FDIO_TEXT:
-		return setmode(fileno(fd), O_TEXT) == -1 ? 0 : 1;
+		return (setmode(fileno(fd), O_TEXT) == -1) ? 0 : 1;
 		break;
 	case FDIO_WTEXT:
-		return setmode(fileno(fd), O_WTEXT) == -1 ? 0 : 1;
+		return (setmode(fileno(fd), O_WTEXT) == -1) ? 0 : 1;
 		break;
 	case FDIO_UTF8:
-		return setmode(fileno(fd), O_U8TEXT) == -1 ? 0 : 1;
+		return (setmode(fileno(fd), O_U8TEXT) == -1) ? 0 : 1;
 		break;
 	case FDIO_UTF16:
-		return setmode(fileno(fd), O_U16TEXT) == -1 ? 0 : 1;
+		return (setmode(fileno(fd), O_U16TEXT) == -1) ? 0 : 1;
 		break;
 	case FDIO_BINARY:
-		return setmode(fileno(fd), O_BINARY) == -1 ? 0 : 1;
+		return (setmode(fileno(fd), O_BINARY) == -1) ? 0 : 1;
 		break;
 	}
 #else /* ! PCF_IS_WIN */
-	/* it is handled in all binary mode in Linux */
+	/* it is always binary mode on Linux */
 	PCF_UNUSED(fd);
 	PCF_UNUSED(mode);
 	return 1;
@@ -89,7 +89,6 @@ int fdio_closeNonDefFds() {
 	return 1;
 #else /* ! HAS_CLOSEFROM */
 	DIR * d;
-	int fd;
 	if ((d = opendir("/proc/self/fd")) == NULL) {
 		d = opendir("/dev/fd");
 	}
@@ -102,7 +101,7 @@ int fdio_closeNonDefFds() {
 			errno = 0;
 			l = strtol(de->d_name, &e, 10);
 			if (errno != 0 || !e || *e) continue;
-			fd = (int)l;
+			const int fd = (int)l;
 			if (((long)fd) != l) continue;
 			if (fd < 3) continue;
 			if (fd == dirfd(d)) continue;
@@ -112,8 +111,8 @@ int fdio_closeNonDefFds() {
 	} else {
 		/* fallback */
 		int i;
-		int maxFd = (int)sysconf(_SC_OPEN_MAX);
-		for (i = 3; i < maxFd; i++) close(i);
+		const int maxFdCount = (int)sysconf(_SC_OPEN_MAX);
+		for (i = 3; i < maxFdCount; i++) close(i);
 	}
 	return 1;
 #endif /* ! HAS_CLOSEFROM */
