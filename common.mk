@@ -1,7 +1,7 @@
 APPS = binstats
 
-binstats_version = 1.1.2
-binstats_version_date = 2018-02-28
+binstats_version = 1.2.0
+binstats_version_date = 2019-01-04
 binstats_author = Daniel Starke
 
 CPPFLAGS += '-DBINSTATS_VERSION="$(binstats_version) ($(binstats_version_date))"' '-DBINSTATS_AUTHOR="$(binstats_author)"'

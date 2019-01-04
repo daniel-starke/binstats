@@ -1,7 +1,7 @@
 /**
  * @file DroppableReadOnlyInput.hpp
  * @author Daniel Starke
- * @copyright Copyright 2017-2018 Daniel Starke
+ * @copyright Copyright 2017-2019 Daniel Starke
  * @date 2017-12-01
  * @version 2017-12-01
  */

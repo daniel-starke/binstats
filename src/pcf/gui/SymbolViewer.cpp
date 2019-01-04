@@ -1,9 +1,9 @@
 /**
  * @file SymbolViewer.cpp
  * @author Daniel Starke
- * @copyright Copyright 2017-2018 Daniel Starke
+ * @copyright Copyright 2017-2019 Daniel Starke
  * @date 2017-12-01
- * @version 2017-12-05
+ * @version 2019-01-04
  * @remarks nm -S --size-sort -f bsd -t d <file>
  */
 #include <algorithm>
@@ -807,6 +807,12 @@ int SymbolViewer::handle(int e) {
 		this->read();
 		result = 1;
 		break;
+	case FL_SHORTCUT:
+		if (Fl::event_key() == (FL_F + 5)) {
+			this->read(true);
+			result = 1;
+		}
+		break;
 	default:
 		break;
 	}
@@ -860,8 +866,10 @@ void SymbolViewer::onTableEvent(Fl_Table_Row * /* table */) {
 
 /**
  * Reads the symbol list from the binary file and updates the tables if possible.
+ * 
+ * @param[in] force - forces a fresh read
  */
-void SymbolViewer::read() {
+void SymbolViewer::read(const bool force) {
 	struct stat fileInfo[1];
 	/* check values */
 	if (this->nmPath->value() == NULL) return;
@@ -869,7 +877,7 @@ void SymbolViewer::read() {
 	if (this->binPath->value() == NULL) return;
 	if (this->binPath->value()[0] == 0) return;
 	/* check if we need to read the data again */
-	if (nullSafeStrCmp(this->nmPath->value(), this->currentNm) == 0 && nullSafeStrCmp(this->binPath->value(), this->currentBin) == 0) return;
+	if (force == false && nullSafeStrCmp(this->nmPath->value(), this->currentNm) == 0 && nullSafeStrCmp(this->binPath->value(), this->currentBin) == 0) return;
 	/* update current path */
 	if (this->currentNm != NULL) free(this->currentNm);
 	this->currentNm = strdup(this->nmPath->value());
@@ -959,7 +967,7 @@ void SymbolViewer::read() {
 			if ((!isalpha(type) && type != '?') || *next != ' ') continue;
 			next++;
 			const char * name = next;
-			/* @todo demangle symbol */
+			/* demangle symbol */
 			const char * symStart = xstrrpbrk(name, ".$");
 			if (symStart == NULL) {
 				symStart = name;

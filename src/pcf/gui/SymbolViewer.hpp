@@ -1,9 +1,9 @@
 /**
  * @file SymbolViewer.hpp
  * @author Daniel Starke
- * @copyright Copyright 2017-2018 Daniel Starke
+ * @copyright Copyright 2017-2019 Daniel Starke
  * @date 2017-12-01
- * @version 2017-12-03
+ * @version 2019-01-04
  */
 #ifndef __PCF_GUI_SYMBOLVIEWER_HPP__
 #define __PCF_GUI_SYMBOLVIEWER_HPP__
@@ -126,7 +126,7 @@ private:
 	void onChangePattern(Fl_Input * input);
 	void onTableEvent(Fl_Table_Row * table);
 	
-	void read();
+	void read(const bool force = false);
 	void update();
 };
 

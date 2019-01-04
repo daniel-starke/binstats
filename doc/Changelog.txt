@@ -4,6 +4,9 @@ M.N.P
 | +---- minor: increased if syntax/semantic breaking changes were applied
 +------ major: increased if elementary changes (from user's point of view) were made
 
+1.2.0 (2019-01-04)
+ - added: F5 shortcut to refresh the views
+
 1.1.2 (2018-02-28)
  - fixed: invalid memory access on child program instantiation in Linux implementation
 
