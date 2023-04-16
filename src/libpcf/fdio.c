@@ -1,7 +1,7 @@
 /**
  * @file fdio.c
  * @author Daniel Starke
- * @copyright Copyright 2015-2019 Daniel Starke
+ * @copyright Copyright 2015-2023 Daniel Starke
  * @see fdio.h
  * @date 2015-02-28
  * @version 2018-02-26

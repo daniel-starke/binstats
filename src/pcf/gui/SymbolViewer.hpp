@@ -1,9 +1,9 @@
 /**
  * @file SymbolViewer.hpp
  * @author Daniel Starke
- * @copyright Copyright 2017-2019 Daniel Starke
+ * @copyright Copyright 2017-2023 Daniel Starke
  * @date 2017-12-01
- * @version 2019-01-04
+ * @version 2023-04-16
  */
 #ifndef __PCF_GUI_SYMBOLVIEWER_HPP__
 #define __PCF_GUI_SYMBOLVIEWER_HPP__
@@ -35,7 +35,7 @@ class SymbolViewer : public Fl_Double_Window {
 public:
 	struct Statistics {
 		char type;
-		size_t size;
+		long long int size;
 		size_t symbols;
 		
 		explicit Statistics(const char aType = '?', const size_t aSize = 0, const size_t aSymbols = 0):
@@ -49,7 +49,7 @@ public:
 	
 	struct Symbol {
 		char type;
-		size_t size;
+		long long int size;
 		char * name; /* automatically freed on destruction */
 		
 		explicit Symbol(const char aType = '?', const size_t aSize = 0, char * aName = NULL):

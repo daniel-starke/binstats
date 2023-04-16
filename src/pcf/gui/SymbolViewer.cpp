@@ -1,9 +1,9 @@
 /**
  * @file SymbolViewer.cpp
  * @author Daniel Starke
- * @copyright Copyright 2017-2019 Daniel Starke
+ * @copyright Copyright 2017-2023 Daniel Starke
  * @date 2017-12-01
- * @version 2019-01-04
+ * @version 2023-04-16
  * @remarks nm -S --size-sort -f bsd -t d <file>
  */
 #include <algorithm>
@@ -305,8 +305,19 @@ const char * xstrrpbrk(const char * str, const char * find) {
  * @return true if less, else false
  */
 template <typename T>
-bool bySizeReverseOrder(const T & lhs, const T & rhs) {
+inline bool bySizeReverseOrder(const T & lhs, const T & rhs) {
 	return lhs.size > rhs.size;
+}
+
+
+/**
+ * Rounds the given float value to an integer value.
+ * 
+ * @param[in] val - value to round
+ * @return rounded value
+ */
+inline int roundToInt(const float val) {
+	return (val >= 0.0f) ? int(val + 0.5f) : int(val - 0.5f);
 }
 
 
@@ -498,7 +509,7 @@ protected:
 			fl_draw_box(FL_UP_BOX, X, Y, W, H, col_header_color());
 			if (this->headerData[size_t(C)] != NULL) {
 				fl_color(FL_BLACK);
-				fl_draw(this->headerData[size_t(C)], X + spaceH, Y, W, H, FL_ALIGN_LEFT);
+				fl_draw(this->headerData[size_t(C)], X + spaceH, Y, W, H, FL_ALIGN_LEFT, NULL, 0);
 			}
 			fl_pop_clip();
 			break;
@@ -517,7 +528,7 @@ protected:
 			/* draw text */
 			if (this->listData[size_t(R)](size_t(C), this->userData) != NULL) {
 				fl_color(row_selected(R) ? fl_contrast(selection_color(), FL_FOREGROUND_COLOR) : FL_FOREGROUND_COLOR);
-				fl_draw(this->listData[size_t(R)](size_t(C), this->userData), X + spaceH, Y, W, H, FL_ALIGN_LEFT);
+				fl_draw(this->listData[size_t(R)](size_t(C), this->userData), X + spaceH, Y, W, H, FL_ALIGN_LEFT, NULL, 0);
 			}
 			
 			/* draw borders */
@@ -580,16 +591,16 @@ const char * SymbolViewer::Statistics::operator() (const size_t i, const Statist
 		break;
 	case 1:
 		{
-			const float percent = (100.0f * float(this->size) / float(userData.size)) + 0.5f;
-			snprintf(buffer, sizeof(buffer), "%llu (%i%%)", static_cast<unsigned long long>(this->size), int(percent));
+			const float percent = 100.0f * float(this->size) / float(userData.size);
+			snprintf(buffer, sizeof(buffer), "%lld (%i%%)", this->size, roundToInt(percent));
 		}
 		buffer[31] = 0;
 		return buffer;
 		break;
 	case 2:
 		{
-			const float percent = (100.0f * float(this->symbols) / float(userData.symbols)) + 0.5f;
-			snprintf(buffer, sizeof(buffer), "%llu (%i%%)", static_cast<unsigned long long>(this->symbols), int(percent));
+			const float percent = 100.0f * float(this->symbols) / float(userData.symbols);
+			snprintf(buffer, sizeof(buffer), "%llu (%i%%)", static_cast<unsigned long long>(this->symbols), roundToInt(percent));
 		}
 		buffer[31] = 0;
 		return buffer;
@@ -622,8 +633,8 @@ const char * SymbolViewer::Symbol::operator() (const size_t i, const Statistics 
 		break;
 	case 1:
 		{
-			const float percent = (100.0f * float(this->size) / float(userData.size)) + 0.5f;
-			snprintf(buffer, sizeof(buffer), "%llu (%i%%)", static_cast<unsigned long long>(this->size), int(percent));
+			const float percent = 100.0f * float(this->size) / float(userData.size);
+			snprintf(buffer, sizeof(buffer), "%lld (%i%%)", this->size, roundToInt(percent));
 		}
 		buffer[31] = 0;
 		return buffer;
@@ -870,6 +881,11 @@ void SymbolViewer::onTableEvent(Fl_Table_Row * /* table */) {
  * @param[in] force - forces a fresh read
  */
 void SymbolViewer::read(const bool force) {
+	static const char * compilerAttrSuffix[] = {
+		".constprop.",
+		".lto_priv.",
+		NULL
+	};
 	struct stat fileInfo[1];
 	/* check values */
 	if (this->nmPath->value() == NULL) return;
@@ -968,6 +984,19 @@ void SymbolViewer::read(const bool force) {
 			next++;
 			const char * name = next;
 			/* demangle symbol */
+			char * compilerAttr = NULL;
+			size_t compilerAttrLen = 0;
+			for (const char ** cas = compilerAttrSuffix; *cas != NULL; cas++) {
+				char * attribute = strstr(next, *cas);
+				if (attribute != NULL) {
+					compilerAttr = strdup(attribute + 1);
+				}
+				if (compilerAttr != NULL) {
+					attribute[0] = 0;
+					compilerAttrLen = strlen(compilerAttr) + 1;
+					break;
+				}
+			}
 			const char * symStart = xstrrpbrk(name, ".$");
 			if (symStart == NULL) {
 				symStart = name;
@@ -979,25 +1008,55 @@ void SymbolViewer::read(const bool force) {
 			if (status == 0) {
 				/* got demangled name */
 				if (symStart == name) {
-					const Symbol entry(type, size_t(size), strdup(realSymName));
-					this->symbolList.push_back(entry);
+					if (compilerAttr == NULL) {
+						const Symbol entry(type, size, strdup(realSymName));
+						this->symbolList.push_back(entry);
+					} else {
+						const size_t realSymLen = strlen(realSymName);
+						char * newName = static_cast<char *>(realloc(realSymName, sizeof(char) * (realSymLen + compilerAttrLen + 1)));
+						if (newName != NULL && newName != realSymName) {
+							realSymName = newName;
+							realSymName[realSymLen] = '.';
+							memcpy(realSymName + realSymLen + 1, compilerAttr, compilerAttrLen);
+							const Symbol entry(type, size, strdup(realSymName));
+							this->symbolList.push_back(entry);
+						}
+					}
 				} else {
 					const size_t realSymLen = strlen(realSymName);
-					char * newName = static_cast<char *>(realloc(realSymName, sizeof(char) * (realSymLen + symStart - name + 1)));
+					char * newName = static_cast<char *>(realloc(realSymName, sizeof(char) * (realSymLen + compilerAttrLen + symStart - name + 1)));
 					if (newName != NULL && newName != realSymName) {
 						realSymName = newName;
 						memmove(realSymName + (symStart - name), realSymName, sizeof(char) * (realSymLen + 1));
 						memcpy(realSymName, name, sizeof(char) * (symStart - name));
-						const Symbol entry(type, size_t(size), strdup(realSymName));
+						if (compilerAttr != NULL) {
+							realSymName[realSymLen + symStart - name] = '.';
+							memcpy(realSymName + realSymLen + (symStart - name) + 1, compilerAttr, compilerAttrLen);
+						}
+						const Symbol entry(type, size, strdup(realSymName));
 						this->symbolList.push_back(entry);
 					}
 				}
 			} else {
 				/* failed to demangle symbol */
-				const Symbol entry(type, size_t(size), strdup(name));
-				this->symbolList.push_back(entry);
+				if (compilerAttr == NULL) {
+					const Symbol entry(type, size, strdup(name));
+					this->symbolList.push_back(entry);
+				} else {
+					const size_t realSymLen = strlen(name);
+					char * newName = static_cast<char *>(malloc(sizeof(char) * (realSymLen + compilerAttrLen + 1)));
+					if (newName != NULL) {
+						realSymName = newName;
+						realSymName[realSymLen] = '.';
+						memcpy(realSymName, name, realSymLen);
+						memcpy(realSymName + realSymLen + 1, compilerAttr, compilerAttrLen);
+						const Symbol entry(type, size, strdup(realSymName));
+						this->symbolList.push_back(entry);
+					}
+				}
 			}
 			if (realSymName != NULL) free(realSymName);
+			if (compilerAttr != NULL) free(compilerAttr);
 		}
 		if ( this->symbolList.empty() ) {
 			fl_message_title("Error");
@@ -1069,7 +1128,9 @@ void SymbolViewer::update() {
 			aStat = newStats + 26;
 		}
 		symsView.listData.push_back(*sym);
-		statsView.userData.size += sym->size;
+		if (sym->size > 0) {
+			statsView.userData.size += sym->size;
+		}
 		statsView.userData.symbols++;
 		if (aStat != NULL) {
 			aStat->size += sym->size;

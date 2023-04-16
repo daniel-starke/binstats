@@ -1,7 +1,7 @@
 #!/bin/bash
 # @file convert-license.sh
 # @author Daniel Starke
-# @copyright Copyright 2017-2019 Daniel Starke
+# @copyright Copyright 2017-2023 Daniel Starke
 # @date 2017-12-03
 # @version 2017-12-03
 
@@ -34,7 +34,7 @@ IFS=""
 /**
  * @file `basename ${OUTPUT}`
  * @author ${binstats_author}
- * @copyright Copyright 2017-2019 Daniel Starke
+ * @copyright Copyright 2017-2023 Daniel Starke
  * @copyright Copyright `date +"%Y"` ${binstats_author}
  * @date `date +"%Y-%m-%d"`
  */

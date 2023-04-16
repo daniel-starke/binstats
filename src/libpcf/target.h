@@ -1,9 +1,9 @@
 /**
  * @file target.h
  * @author Daniel Starke
- * @copyright Copyright 2017-2019 Daniel Starke
+ * @copyright Copyright 2017-2023 Daniel Starke
  * @date 2017-12-02
- * @version 2017-12-05
+ * @version 2019-10-07
  */
 #ifndef __LIBPCF_TARGET_H__
 #define __LIBPCF_TARGET_H__
@@ -303,8 +303,8 @@ static inline uint64_t byteSwap64(uint64_t x) {
 #else /* no x64 */
 static inline uint64_t byteSwap64(const uint64_t x) {
 	uint32_t l, h;
-	__asm__("bswapl %0" : "=r" (l) : "0" ((const uint32_t)(x & 0xFFFFFFFF)));
-	__asm__("bswapl %0" : "=r" (h) : "0" ((const uint32_t)(x >> 32)));
+	__asm__("bswapl %0" : "=r" (l) : "0" ((uint32_t)(x & 0xFFFFFFFF)));
+	__asm__("bswapl %0" : "=r" (h) : "0" ((uint32_t)(x >> 32)));
 	return ((uint64_t)h) | (((uint64_t)l) << 32);
 }
 #endif
