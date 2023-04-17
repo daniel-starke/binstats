@@ -437,6 +437,10 @@ int matchPattern(const char * text, const char * pattern) {
 }
 
 
+/** Most recently updated ListView widget. */
+static Fl_Widget * lastListView = NULL;
+
+
 /**
  * Helper class to couple data to the table view.
  * Changes in headerData and listData need to updated via redraw().
@@ -501,6 +505,68 @@ public:
 	}
 	
 protected:
+	virtual int handle(int e) {
+		int rt1, cl1, rb1, cr1;
+		int rt2, cl2, rb2, cr2;
+		int result;
+		if (e == FL_PUSH || e == FL_DRAG) {
+			this->get_selection(rt1, cl1, rb1, cr1);
+			result = this->DropForward<Fl_Table_Row>::handle(e);
+			this->get_selection(rt2, cl2, rb2, cr2);
+			if (rt1 != rt2 || cl1 != cl2 || rb1 != rb2 || cr1 != cr2) {
+				/* update most recently selected table widget */
+				lastListView = this;
+			}
+		} else {
+			result = this->DropForward<Fl_Table_Row>::handle(e);
+		}
+		if (e == FL_SHORTCUT && Fl::event_ctrl() != 0 && Fl::event_alt() == 0 && Fl::event_key() == 'c' && lastListView == this) {
+			size_t rMin, rMax;
+			if ( Fl::event_shift() ) {
+				/* copy all rows */
+				rMin = 0;
+				rMax = this->listData.size();
+			} else {
+				/* copy selected row */
+				this->get_selection(rt2, cl2, rb2, cr2);
+				if (rt2 < 0) return result;
+				rMin = size_t(rt2);
+				rMax = size_t(rt2 + 1);
+			}
+			size_t len = 0;
+			/* calculate string size for the selected row */
+			for (size_t r = rMin; r < rMax; r++) {
+				for (size_t c = 0; c < Fields; c++) {
+					const char * s = this->listData[r](c, this->userData);
+					if (s != NULL) {
+						len += strlen(s);
+					}
+					len++;
+				}
+			}
+			/* build string */
+			if (len == 0) return result;
+			char * clipboardStr = static_cast<char *>(malloc(sizeof(char) * len));
+			if (clipboardStr == NULL) return result;
+			char * ptr = clipboardStr;
+			char * endPtr = clipboardStr + len;
+			for (size_t r = rMin; r < rMax; r++) {
+				for (size_t c = 0; c < Fields; c++) {
+					const char * s = this->listData[r](c, this->userData);
+					if (s != NULL) {
+						ptr += snprintf(ptr, endPtr - ptr, "%s", s);
+					}
+					*ptr++ = ((c + 1) == Fields) ? '\n' : '\t';
+				}
+			}
+			/* copy to clipboard */
+			Fl::copy(clipboardStr, int(ptr - clipboardStr), 2);
+			free(clipboardStr);
+			result = 1;
+		}
+		return result;
+	}
+	
 	virtual void draw_cell(TableContext context, int R = 0, int C = 0, int X = 0, int Y = 0, int W = 0, int H = 0) {
 		const int spaceH = int(adjDpiH(5));
 		switch (context) {
@@ -675,7 +741,8 @@ SymbolViewer::SymbolViewer(const int W, const int H, const char * L):
 #else
 	currentNm(strdup("nm")),
 #endif
-	currentBin(NULL)
+	currentBin(NULL),
+	demangleSymbols(true)
 {
 	const int spaceH  = adjDpiH(10); /* horizontal spacing */
 	const int spaceV  = adjDpiV(10); /* vertical spacing */
@@ -687,6 +754,9 @@ SymbolViewer::SymbolViewer(const int W, const int H, const char * L):
 	
 	char * nmFromEnv = fl_getenv("NM");
 	if (nmFromEnv != NULL && *nmFromEnv != 0) currentNm = strdup(nmFromEnv);
+	
+	const char * dsFromEnv = fl_getenv("DISABLE_DEMANGLING");
+	if (dsFromEnv != NULL && dsFromEnv[0] == '1' && dsFromEnv[1] == 0) demangleSymbols = false;
 	
 	if (L != NULL) this->baseLabel = strdup(L);
 	
@@ -881,11 +951,6 @@ void SymbolViewer::onTableEvent(Fl_Table_Row * /* table */) {
  * @param[in] force - forces a fresh read
  */
 void SymbolViewer::read(const bool force) {
-	static const char * compilerAttrSuffix[] = {
-		".constprop.",
-		".lto_priv.",
-		NULL
-	};
 	struct stat fileInfo[1];
 	/* check values */
 	if (this->nmPath->value() == NULL) return;
@@ -983,19 +1048,33 @@ void SymbolViewer::read(const bool force) {
 			if ((!isalpha(type) && type != '?') || *next != ' ') continue;
 			next++;
 			const char * name = next;
+			if ( ! this->demangleSymbols ) {
+				const Symbol entry(type, size, strdup(name));
+				this->symbolList.push_back(entry);
+				continue;
+			}
 			/* demangle symbol */
 			char * compilerAttr = NULL;
 			size_t compilerAttrLen = 0;
-			for (const char ** cas = compilerAttrSuffix; *cas != NULL; cas++) {
-				char * attribute = strstr(next, *cas);
-				if (attribute != NULL) {
-					compilerAttr = strdup(attribute + 1);
-				}
-				if (compilerAttr != NULL) {
-					attribute[0] = 0;
-					compilerAttrLen = strlen(compilerAttr) + 1;
+			char * attribute = strchr(next, '$');
+			if (attribute != NULL) {
+				attribute++;
+			} else {
+				attribute = next;
+			}
+			if (strncmp(attribute, ".refptr.", 8) == 0) {
+				attribute += 8;
+			}
+			attribute = strchr(attribute, '.');
+			if (attribute != NULL) {
+				compilerAttr = strdup(attribute);
+				if (compilerAttr == NULL) {
 					break;
 				}
+			}
+			if (compilerAttr != NULL) {
+				attribute[0] = 0;
+				compilerAttrLen = strlen(compilerAttr) + 1;
 			}
 			const char * symStart = xstrrpbrk(name, ".$");
 			if (symStart == NULL) {
@@ -1013,26 +1092,29 @@ void SymbolViewer::read(const bool force) {
 						this->symbolList.push_back(entry);
 					} else {
 						const size_t realSymLen = strlen(realSymName);
-						char * newName = static_cast<char *>(realloc(realSymName, sizeof(char) * (realSymLen + compilerAttrLen + 1)));
-						if (newName != NULL && newName != realSymName) {
-							realSymName = newName;
-							realSymName[realSymLen] = '.';
-							memcpy(realSymName + realSymLen + 1, compilerAttr, compilerAttrLen);
+						char * newName = static_cast<char *>(malloc(sizeof(char) * (realSymLen + compilerAttrLen + 1)));
+						if (newName != NULL) {
+							memcpy(newName, realSymName, realSymLen);
+							memcpy(newName + realSymLen, compilerAttr, compilerAttrLen);
+							const Symbol entry(type, size, newName);
+							this->symbolList.push_back(entry);
+						} else {
 							const Symbol entry(type, size, strdup(realSymName));
 							this->symbolList.push_back(entry);
 						}
 					}
 				} else {
 					const size_t realSymLen = strlen(realSymName);
-					char * newName = static_cast<char *>(realloc(realSymName, sizeof(char) * (realSymLen + compilerAttrLen + symStart - name + 1)));
-					if (newName != NULL && newName != realSymName) {
-						realSymName = newName;
-						memmove(realSymName + (symStart - name), realSymName, sizeof(char) * (realSymLen + 1));
-						memcpy(realSymName, name, sizeof(char) * (symStart - name));
+					char * newName = static_cast<char *>(malloc(sizeof(char) * (realSymLen + compilerAttrLen + symStart - name + 1)));
+					if (newName != NULL) {
+						memcpy(newName, name, sizeof(char) * (symStart - name));
+						memcpy(newName + (symStart - name), realSymName, sizeof(char) * (realSymLen + 1));
 						if (compilerAttr != NULL) {
-							realSymName[realSymLen + symStart - name] = '.';
-							memcpy(realSymName + realSymLen + (symStart - name) + 1, compilerAttr, compilerAttrLen);
+							memcpy(newName + realSymLen + (symStart - name), compilerAttr, compilerAttrLen);
 						}
+						const Symbol entry(type, size, newName);
+						this->symbolList.push_back(entry);
+					} else {
 						const Symbol entry(type, size, strdup(realSymName));
 						this->symbolList.push_back(entry);
 					}
@@ -1046,11 +1128,12 @@ void SymbolViewer::read(const bool force) {
 					const size_t realSymLen = strlen(name);
 					char * newName = static_cast<char *>(malloc(sizeof(char) * (realSymLen + compilerAttrLen + 1)));
 					if (newName != NULL) {
-						realSymName = newName;
-						realSymName[realSymLen] = '.';
-						memcpy(realSymName, name, realSymLen);
-						memcpy(realSymName + realSymLen + 1, compilerAttr, compilerAttrLen);
-						const Symbol entry(type, size, strdup(realSymName));
+						memcpy(newName, name, realSymLen);
+						memcpy(newName + realSymLen, compilerAttr, compilerAttrLen);
+						const Symbol entry(type, size, newName);
+						this->symbolList.push_back(entry);
+					} else {
+						const Symbol entry(type, size, strdup(name));
 						this->symbolList.push_back(entry);
 					}
 				}

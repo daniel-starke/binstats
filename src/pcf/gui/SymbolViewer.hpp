@@ -38,7 +38,7 @@ public:
 		long long int size;
 		size_t symbols;
 		
-		explicit Statistics(const char aType = '?', const size_t aSize = 0, const size_t aSymbols = 0):
+		explicit Statistics(const char aType = '?', const long long int aSize = 0, const size_t aSymbols = 0):
 			type(aType),
 			size(aSize),
 			symbols(aSymbols)
@@ -52,7 +52,7 @@ public:
 		long long int size;
 		char * name; /* automatically freed on destruction */
 		
-		explicit Symbol(const char aType = '?', const size_t aSize = 0, char * aName = NULL):
+		explicit Symbol(const char aType = '?', const long long int aSize = 0, char * aName = NULL):
 			type(aType),
 			size(aSize),
 			name(aName)
@@ -97,6 +97,7 @@ private:
 	TypeFilterPopup         * typeFilter;
 	char                    * currentNm;
 	char                    * currentBin;
+	bool                      demangleSymbols;
 public:
 	explicit SymbolViewer(const int W, const int H, const char * L = NULL);
 	virtual ~SymbolViewer();
