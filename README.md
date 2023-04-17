@@ -28,6 +28,27 @@ Building the program:
 
     make
 
+FAQ
+====
+
+**Q:** Why is there more than on destructor of a single class?  
+**A:** There are actually 3 times of destructors. Standard, `virtual` and `delete` on `virtual`. See [mangling rules](https://itanium-cxx-abi.github.io/cxx-abi/abi.html#definitions).
+
+**Q:** Can I disable symbol demangling?  
+**A:** Yes, just set the environment variable `DISABLE_DEMANGLING=1`.
+
+**Q:** Can I pass the path of NM to binstats?  
+**A:** Yes, set the environment variable `NM` accordingly.
+
+**Q:** How can I update the view after the object file was re-built?  
+**A:** Press `F5`.
+
+**Q:** How can I copy the content of the lists?  
+**A:** Press `CTRL-C` for the current line and `SHIFT-CTRL-C` for the whole list.
+
+**Q:** Why are there symbols with negative sizes?  
+**A:** This may be a bug in nm. Please consult the binutils community.
+
 License
 =======
 
