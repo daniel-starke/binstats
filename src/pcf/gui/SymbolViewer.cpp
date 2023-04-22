@@ -280,24 +280,6 @@ const char * xstrpbrk(const char * str, const char * find) {
 
 
 /**
- * Find last occurrence in str of any of the characters in find.
- * Returns NULL if nothing was found.
- * 
- * @param[in] str - search within this string
- * @param[in] find - find any of this
- * @return last occurrence of find in str or NULL
- */
-const char * xstrrpbrk(const char * str, const char * find) {
-	if (str == NULL || find == NULL) return NULL;
-	const char * res = NULL;
-	for (; *str != 0; str++) {
-		if (strchr(find, *str) != NULL) res = str;
-	}
-	return res;
-}
-
-
-/**
  * Less-than comparer for reverse order by size field.
  * 
  * @param[in] lhs - left hand statement
@@ -1056,16 +1038,12 @@ void SymbolViewer::read(const bool force) {
 			/* demangle symbol */
 			char * compilerAttr = NULL;
 			size_t compilerAttrLen = 0;
-			char * attribute = strchr(next, '$');
-			if (attribute != NULL) {
-				attribute++;
-			} else {
-				attribute = next;
+			char * attribute;
+			const char * symStart = strstr(name, "_Z");
+			if (symStart == NULL) {
+				symStart = name;
 			}
-			if (strncmp(attribute, ".refptr.", 8) == 0) {
-				attribute += 8;
-			}
-			attribute = strchr(attribute, '.');
+			attribute = strchr(symStart, '.');
 			if (attribute != NULL) {
 				compilerAttr = strdup(attribute);
 				if (compilerAttr == NULL) {
@@ -1075,12 +1053,6 @@ void SymbolViewer::read(const bool force) {
 			if (compilerAttr != NULL) {
 				attribute[0] = 0;
 				compilerAttrLen = strlen(compilerAttr) + 1;
-			}
-			const char * symStart = xstrrpbrk(name, ".$");
-			if (symStart == NULL) {
-				symStart = name;
-			} else {
-				symStart++;
 			}
 			int status;
 			char * realSymName = abi::__cxa_demangle(symStart, 0, 0, &status);

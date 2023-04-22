@@ -47,9 +47,10 @@ else
  LDFLAGS = -static -fno-omit-frame-pointer -Wl,--allow-multiple-definition -L$(LIBDIR)
 endif
 ifneq (,$(UNICODE))
+ BASE_CFLAGS += -municode
  LDFLAGS += -municode
 endif
 export CFLAGS = -std=gnu99 $(BASE_CFLAGS)
-export CXXFLAGS = -Wcast-qual -Wnon-virtual-dtor -Wold-style-cast -Wno-unused-parameter -Wno-long-long -Wno-maybe-uninitialized -std=c++03 $(BASE_CFLAGS)
+export CXXFLAGS = -Wcast-qual -Wnon-virtual-dtor -Wold-style-cast -Wno-unused-parameter -Wno-long-long -Wno-maybe-uninitialized -std=c++03 -fno-rtti -fno-exceptions $(BASE_CFLAGS)
 
 include common.mk

@@ -4,6 +4,10 @@ M.N.P
 | +---- minor: increased if syntax/semantic breaking changes were applied
 +------ major: increased if elementary changes (from user's point of view) were made
 
+1.4.1 (2023-04-22)
+ - fixed: demangling parser to catch more cases
+ - fixed: Unicode build for Windows
+
 1.4.0 (2023-04-17)
  - added: CTRL-C and SHIFT-CTRL-C shortcut to copy statistic and symbol values
  - added: correct demangling of any symbol name suffix starting with '.'
